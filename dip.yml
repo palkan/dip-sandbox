@@ -1,0 +1,22 @@
+version: '8.0'
+
+compose:
+  files:
+    - ./compose.yml
+  project_name: dip-sandbox
+
+interaction:
+  ruby:
+    description: Open a Ruby terminal with full network access
+    service: ruby
+    command: bash
+
+  'ruby:sandbox':
+    description: Open a Ruby terminal with network through the proxy only (start the proxy first)
+    service: ruby-sandbox
+    command: bash
+
+  'claude:sandbox':
+    description: Run Claude Code in the sandbox (start the proxy first)
+    service: ruby-sandbox
+    command: claude

@@ -1,0 +1,92 @@
+name: dip-sandbox
+
+x-ruby: &ruby
+  build:
+    context: .
+    args:
+      RUBY_VERSION: "4.0"
+  image: dip-sandbox-ruby:4.0
+  command: bash
+  working_dir: ${PWD}
+  environment: &ruby_env
+    LANG: C.UTF-8
+    HISTFILE: /usr/local/hist/.bash_history
+    PROMPT_DIRTRIM: 2
+    PS1: '[\W]\! '
+    BUNDLE_GEMFILE: ${BUNDLE_GEMFILE:-Gemfile}
+
+x-hardening: &hardening
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+services:
+  proxy:
+    <<: *hardening
+    image: ruby:4.0-alpine
+    entrypoint: [ruby, /proxy.rb]
+    read_only: true
+    pids_limit: 256
+    mem_limit: 256m
+    volumes:
+      - ./proxy.rb:/proxy.rb:ro
+    environment:
+      - CLAUDE_CODE_OAUTH_TOKEN
+      - ANTHROPIC_API_KEY
+      - PROXY_API_ROUTES
+      - PROXY_ALLOW_HOSTS
+    networks:
+      - default
+      - sandbox
+
+  ruby:
+    <<: *ruby
+    volumes:
+      - ${PWD}:/${PWD}:cached
+      - bundle:/usr/local/bundle
+      - history:/usr/local/hist
+      - claude:/root/.claude
+
+  ruby-sandbox:
+    <<: [*ruby, *hardening]
+    pids_limit: ${SANDBOX_PIDS:-1024}
+    mem_limit: ${SANDBOX_MEMORY:-8g}
+    cpus: ${SANDBOX_CPUS:-4}
+    volumes:
+      - ${PWD}:/${PWD}:cached
+      - type: bind
+        source: ${PWD}/.git
+        target: ${PWD}/.git
+        read_only: true
+        bind:
+          create_host_path: false
+      - bundle_sandbox:/usr/local/bundle
+      - history_sandbox:/usr/local/hist
+      - claude_sandbox:/root/.claude-sandbox
+      - ./claude-managed:/etc/claude-code:ro
+    environment:
+      <<: *ruby_env
+      CLAUDE_CONFIG_DIR: /root/.claude-sandbox
+      ANTHROPIC_BASE_URL: http://proxy:8080
+      CLAUDE_CODE_OAUTH_TOKEN: sandbox
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+      DISABLE_AUTOUPDATER: "1"
+      HTTP_PROXY: http://proxy:3128
+      HTTPS_PROXY: http://proxy:3128
+      http_proxy: http://proxy:3128
+      https_proxy: http://proxy:3128
+      NO_PROXY: localhost,127.0.0.1,proxy
+      no_proxy: localhost,127.0.0.1,proxy
+    networks:
+      - sandbox
+
+networks:
+  sandbox:
+    internal: true
+
+volumes:
+  bundle:
+  history:
+  claude:
+  bundle_sandbox:
+  history_sandbox:
+  claude_sandbox:
